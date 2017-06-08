@@ -22,9 +22,9 @@ Write markdown as follows
 Now h1, h2, h3, h4, itemization(1., 2. ... n.) and check marks(*[ ]) are supported.
 
 * A h1 element means evaluation category. This will be converted to a sheet in xlsx.
-* A h2, h3 and h4 element mean major item, middle item and minor item respectively.
-* Items beggining with "n." mean test procedures.
-* Items beggining with "* [ ]" mean check points of this test.
+* h2, h3 and h4 elements mean major item, middle item and minor item respectively.
+* Items beginning with "n." mean test procedures.
+* Items beginning with "* [ ]" mean check points of this test.
 
 ### Convert markdown to xlsx
 
