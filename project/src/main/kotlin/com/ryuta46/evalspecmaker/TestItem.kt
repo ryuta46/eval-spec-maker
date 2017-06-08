@@ -10,34 +10,27 @@ internal class TestItem {
         CONFIRM
     }
 
-    private val mChildren = java.util.ArrayList<TestItem>()
-    private val mBodies = java.util.ArrayList<String>()
-    private val mMethods = java.util.ArrayList<String>()
-    private val mConfirms = java.util.ArrayList<String>()
-    var parent: TestItem? = null
-        private set
+    private val _children = mutableListOf<TestItem>()
+    val children: List<TestItem>
+        get() = _children
+
+    private val bodyList = mutableListOf<String>()
+    private val methodList = mutableListOf<String>()
+    private val confirmList = mutableListOf<String>()
 
     private var mAddTarget = TextContainer.BODY
 
     var level = 0
 
-    fun addText(text: String) {
-        when (mAddTarget) {
-            TextContainer.BODY -> mBodies.add(text)
-            TextContainer.METHOD -> {
-                val ind = mMethods.size + 1
-                mMethods.add(ind.toString() + ". " + text)
-            }
-            TextContainer.CONFIRM -> mConfirms.add("・" + text)
-        }
-    }
 
     val bodies: String
-        get() = textListToString(mBodies)
+        get() = textListToString(bodyList)
     val methods: String
-        get() = textListToString(mMethods)
+        get() = textListToString(methodList)
     val confirms: String
-        get() = textListToString(mConfirms)
+        get() = textListToString(confirmList)
+
+
 
     private fun textListToString(list: List<String>): String {
         if (list.isEmpty()) {
@@ -52,19 +45,19 @@ internal class TestItem {
     }
 
     fun addChild(child: TestItem) {
-        mChildren.add(child)
-        child.parent = this
+        _children.add(child)
     }
 
     fun setAddTarget(target: TextContainer) {
         mAddTarget = target
     }
 
-    val childCount: Int
-        get() = mChildren.size
-
-    fun getChild(index: Int): TestItem {
-        return mChildren[index]
+    fun addText(text: String) {
+        when (mAddTarget) {
+            TextContainer.BODY -> bodyList.add(text)
+            TextContainer.METHOD -> methodList.add((methodList.size + 1).toString() + ". " + text)
+            TextContainer.CONFIRM -> confirmList.add("・" + text)
+        }
     }
 
 
@@ -77,17 +70,17 @@ internal class TestItem {
 
 
         println(String.format("%sL:%d", prefix, level))
-        for (text in mBodies) {
+        for (text in bodyList) {
             println(String.format("%sT:%s", prefix, text))
         }
-        for (text in mMethods) {
+        for (text in methodList) {
             println(String.format("%sM:%s", prefix, text))
         }
-        for (text in mConfirms) {
+        for (text in confirmList) {
             println(String.format("%sC:%s", prefix, text))
         }
 
-        for (childNode in mChildren) {
+        for (childNode in _children) {
             childNode.printInformation(level + 1)
         }
     }

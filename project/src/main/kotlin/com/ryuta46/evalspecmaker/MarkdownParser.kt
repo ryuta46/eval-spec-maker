@@ -1,5 +1,6 @@
 package com.ryuta46.evalspecmaker
 
+import com.ryuta46.evalspecmaker.util.Logger
 import org.pegdown.PegDownProcessor
 import org.pegdown.ast.*
 
@@ -9,83 +10,77 @@ import java.io.IOException
 import java.util.Locale
 
 object MarkdownParser {
+    val logger = Logger(this.javaClass.simpleName)
 
     @Throws(IOException::class)
     internal fun parse(file: String): TestItem {
-        var reader: FileReader? = null
-
-        try {
+        logger.trace {
             val inputMarkdown = File(file)
             val buff = CharArray(inputMarkdown.length().toInt())
 
-            reader = FileReader(inputMarkdown)
-            val readSize = reader.read(buff)
-            //if (readSize != inputMarkdown.length()) {
-            //    throw new IOException("Invalid read size");
-            //}
+            FileReader(inputMarkdown).use { reader ->
+                reader.read(buff)
+                val processor = PegDownProcessor()
+                val rootNode = processor.parseMarkdown(buff)
 
-            val processor = PegDownProcessor()
-            val rootNode = processor.parseMarkdown(buff)
-            val rootItem = TestItem()
-            rootItem.level = 0
-            convertToTestItem(rootNode, rootItem)
+                val rootItem = TestItem().apply { level = 0 }
 
-            return rootItem
-
-        } finally {
-            if (reader != null) {
-                reader.close()
+                convertToTestItem(rootNode, mutableListOf(rootItem))
+                return rootItem
             }
         }
-        //printNodes(rootNode, 0);
     }
 
 
-    private fun convertToTestItem(node: Node, parent: TestItem): TestItem {
-        var parent = parent
-        var newParent: TestItem = parent
-        if (node is HeaderNode) {
-            val headerNode = node
-            println(String.format(Locale.JAPAN, "h%d", headerNode.level))
-            val level = headerNode.level
+    private fun convertToTestItem(node: Node, parentStack: MutableList<TestItem>) {
+        logger.trace {
+            if (node is HeaderNode) {
+                val nodeLevel = node.level
+                logger.i(String.format(Locale.JAPAN, "h%d", nodeLevel))
 
-            val newItem = TestItem()
-            newItem.level = level
+                // 自分より階層が上の直近のノードを親する
+                parentStack.removeAll{ it.level >= nodeLevel }
+                val target = parentStack.lastOrNull() ?: return
 
-            // 自分のlevel-1 の親を探す.
-            while (parent != null && parent.level > level - 1) {
-                // ルートノードを超えて親を探索することは無いはずなので、この処理はフェールセーフ
-                if (parent.parent == null) {
-                    System.err.println("Error!! Failed to search parent.")
-                    return newParent
+                val newItem = TestItem().apply { level = nodeLevel }
+                target.addChild(newItem)
+                parentStack.add(newItem)
+            } else {
+                val target = parentStack.lastOrNull() ?: return
+                when(node) {
+                    is TextNode -> {
+                        val text = node.text.trim { it <= ' ' }
+                        if (!text.isEmpty()) {
+                            logger.i(String.format(Locale.JAPAN, "text:%s", text))
+                            target.addText(text)
+                        }
+                    }
+                    is ListItemNode -> target.setAddTarget(TestItem.TextContainer.METHOD)
+                    is RefLinkNode -> target.setAddTarget(TestItem.TextContainer.CONFIRM)
+                    else -> logger.d("Class:" + node.javaClass.name)
                 }
-                parent = parent.parent!!
             }
 
-            parent.addChild(newItem)
-            newParent = newItem
-        } else if (node is TextNode) {
-            val text = node.text.trim { it <= ' ' }
-
-            if (!text.isEmpty()) {
-                println(String.format(Locale.JAPAN, "text:%s", text))
-                parent.addText(text)
+            for (childNode in node.children) {
+                convertToTestItem(childNode, parentStack)
             }
-
-        } else if (node is ListItemNode) {
-            parent.setAddTarget(TestItem.TextContainer.METHOD)
-        } else if (node is RefLinkNode) {
-            parent.setAddTarget(TestItem.TextContainer.CONFIRM)
-        } else {
-            println("Class:" + node.javaClass.name)
         }
+    }
 
-        for (childNode in node.children) {
-            newParent = convertToTestItem(childNode, newParent)
+    private fun printNode(node: Node, level: Int) {
+        logger.trace {
+            val builder = StringBuilder()
+            for (i in 0..level - 1) {
+                builder.append("-")
+            }
+            val prefix = builder.toString()
+
+            println(prefix + node.javaClass.name)
+
+            for (childNode in node.children) {
+                printNode(childNode, level+1)
+            }
         }
-
-        return newParent
-
     }
 
 }

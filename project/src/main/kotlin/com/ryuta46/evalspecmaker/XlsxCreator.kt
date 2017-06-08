@@ -1,20 +1,33 @@
 package com.ryuta46.evalspecmaker
 
+import com.ryuta46.evalspecmaker.util.Logger
+import org.apache.poi.ss.usermodel.*
+import org.apache.poi.xssf.usermodel.XSSFWorkbook
 
 class XlsxCreator {
+    val logger = Logger(this.javaClass.simpleName)
 
-    private val book: org.apache.poi.ss.usermodel.Workbook
+    companion object {
+        // 列幅最大値
+        private val MAX_WIDTH = 10000
+        // 推定折り返し文字数
+        private val WRAP_CHAR_LENGTH = 20
+        // ヘッダ行のインデックス
+        private val HEADER_INDEX = 1
+    }
+
+    private val book: Workbook
 
     // デフォルトのスタイル
-    private val cellStyle: org.apache.poi.ss.usermodel.CellStyle
+    private val cellStyle: CellStyle
     // 下の枠なし
-    private val cellStyleNoBottomBorder: org.apache.poi.ss.usermodel.CellStyle
+    private val cellStyleNoBottomBorder: CellStyle
     // 上下の枠なし
-    private val cellStyleNoVerticalBorder: org.apache.poi.ss.usermodel.CellStyle
+    private val cellStyleNoVerticalBorder: CellStyle
     // 中央寄せ
-    private val cellStyleCenter: org.apache.poi.ss.usermodel.CellStyle
+    private val cellStyleCenter: CellStyle
     // ヘッダのスタイル
-    private val cellStyleHeader: org.apache.poi.ss.usermodel.CellStyle
+    private val cellStyleHeader: CellStyle
 
     private enum class Column(val title: String) {
         MAJOR("大項目"),
@@ -34,10 +47,10 @@ class XlsxCreator {
 
 
     init {
-        book = org.apache.poi.xssf.usermodel.XSSFWorkbook()
+        book = XSSFWorkbook()
         cellStyle = book.createCellStyle().apply {
-            alignment = org.apache.poi.ss.usermodel.CellStyle.ALIGN_LEFT
-            verticalAlignment = org.apache.poi.ss.usermodel.CellStyle.VERTICAL_TOP
+            alignment = CellStyle.ALIGN_LEFT
+            verticalAlignment = CellStyle.VERTICAL_TOP
             wrapText = true
             borderTop = 1.toShort()
             borderLeft = 1.toShort()
@@ -57,31 +70,31 @@ class XlsxCreator {
 
         cellStyleCenter = book.createCellStyle().apply {
             cloneStyleFrom(cellStyle)
-            alignment = org.apache.poi.ss.usermodel.CellStyle.ALIGN_CENTER
-            verticalAlignment = org.apache.poi.ss.usermodel.CellStyle.VERTICAL_CENTER
+            alignment = CellStyle.ALIGN_CENTER
+            verticalAlignment = CellStyle.VERTICAL_CENTER
             // 何故か以下行を呼び出さないと中央揃えにならない
-            fillForegroundColor = org.apache.poi.ss.usermodel.IndexedColors.GREY_25_PERCENT.getIndex()
+            fillForegroundColor = IndexedColors.GREY_25_PERCENT.getIndex()
         }
 
 
         cellStyleHeader = book.createCellStyle().apply {
             cloneStyleFrom(cellStyle)
-            alignment = org.apache.poi.ss.usermodel.CellStyle.ALIGN_CENTER
-            verticalAlignment = org.apache.poi.ss.usermodel.CellStyle.VERTICAL_CENTER
-            fillForegroundColor = org.apache.poi.ss.usermodel.IndexedColors.GREY_25_PERCENT.getIndex()
-            fillPattern = org.apache.poi.ss.usermodel.CellStyle.SOLID_FOREGROUND
+            alignment = CellStyle.ALIGN_CENTER
+            verticalAlignment = CellStyle.VERTICAL_CENTER
+            fillForegroundColor = IndexedColors.GREY_25_PERCENT.getIndex()
+            fillPattern = CellStyle.SOLID_FOREGROUND
         }
     }
 
 
     @Throws(java.io.IOException::class)
     internal fun createXlsx(file: String, rootItem: TestItem) {
-        (0..rootItem.childCount - 1)
-                .map { rootItem.getChild(it) }
-                .forEach { createCategory(it) }
+        logger.trace {
+            rootItem.children.forEach { createCategory(it) }
 
-        java.io.FileOutputStream(file).use {
-            book.write(it)
+            java.io.FileOutputStream(file).use {
+                book.write(it)
+            }
         }
     }
 
@@ -94,33 +107,29 @@ class XlsxCreator {
 
         var rowIndex = HEADER_INDEX + 1
 
-        for (i in 0..categoryItem.childCount - 1) {
-            // 大項目
-            val major = categoryItem.getChild(i)
+        categoryItem.children.forEach { major ->
             val majorBody = major.bodies
             var majorLineCount = estimateLineCount(majorBody)
             setCellValue(sheet, Column.MAJOR.index, rowIndex, majorBody).cellStyle = cellStyleNoBottomBorder
 
-
-            for (j in 0..major.childCount - 1) {
-                // 中項目
-                val middle = major.getChild(j)
+            major.children.forEachIndexed { middleIndex, middle ->
                 val middleBody = middle.bodies
                 var middleLineCount = estimateLineCount(middleBody)
 
                 setCellValue(sheet, Column.MIDDLE.index, rowIndex, middleBody).cellStyle = cellStyleNoBottomBorder
 
-                for (k in 0..middle.childCount - 1) {
-                    if (j > 0 || k > 0) {
+                middle.children.forEachIndexed { minorIndex, minor ->
+                    // 中項目、小項目のみが進んだ場合は大項目の縦線なし
+                    if (middleIndex > 0 || minorIndex > 0) {
                         setCellValue(sheet, Column.MAJOR.index, rowIndex, "").cellStyle = cellStyleNoVerticalBorder
                         majorLineCount = 1
                     }
-                    if (k > 0) {
+                    // 小項目のみが進んだ場合は中項目の縦線なし
+                    if (minorIndex > 0) {
                         setCellValue(sheet, Column.MIDDLE.index, rowIndex, "").cellStyle = cellStyleNoVerticalBorder
                         middleLineCount = 1
                     }
-                    // 小項目
-                    val minor = middle.getChild(k)
+
                     val minorBody = minor.bodies
                     val method = minor.methods
                     val confirm = minor.confirms
@@ -142,7 +151,6 @@ class XlsxCreator {
                     val row = sheet.getRow(rowIndex)
                     row.height = (row.height * maxRowHeightUnit).toShort()
 
-
                     // スタイルのみ設定する項目を設定
                     setCellValue(sheet, Column.RESULT.index, rowIndex, "").cellStyle = cellStyleCenter
                     setCellValue(sheet, Column.DATE.index, rowIndex, "")
@@ -163,7 +171,7 @@ class XlsxCreator {
         }
     }
 
-    private fun setCellValue(sheet: org.apache.poi.ss.usermodel.Sheet, columnIndex: Int, rowIndex: Int, text: String): org.apache.poi.ss.usermodel.Cell {
+    private fun setCellValue(sheet: Sheet, columnIndex: Int, rowIndex: Int, text: String): Cell {
         val row = sheet.getRow(rowIndex) ?: sheet.createRow(rowIndex)
         val cell = row.getCell(columnIndex) ?: row.createCell(columnIndex)
 
@@ -184,20 +192,10 @@ class XlsxCreator {
 
     }
 
-    private fun setColumnHeader(sheet: org.apache.poi.ss.usermodel.Sheet) {
+    private fun setColumnHeader(sheet: Sheet) {
         Column.values().forEach { column ->
             setCellValue(sheet, column.index, Companion.HEADER_INDEX, column.title).cellStyle = cellStyleHeader
         }
     }
 
-    companion object {
-
-        // 列幅最大値
-        private val MAX_WIDTH = 10000
-        // 推定折り返し文字数
-        private val WRAP_CHAR_LENGTH = 20
-
-        // ヘッダ行のインデックス
-        private val HEADER_INDEX = 1
-    }
 }
