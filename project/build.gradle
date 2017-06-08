@@ -4,7 +4,7 @@ version '1.0-SNAPSHOT'
 apply plugin: 'application'
 apply plugin: 'kotlin'
 
-mainClassName = "Main"
+mainClassName = "com.ryuta46.evalspecmaker.Main"
 def executableBaseName = "evalSpecMaker"
 def exportDir = "export"
 
